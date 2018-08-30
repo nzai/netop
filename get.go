@@ -41,9 +41,7 @@ func Get(url string, parameters ...RequestParam) (*http.Response, error) {
 
 	request, err := http.NewRequest("GET", param.URL, nil)
 	if err != nil {
-		if param.logChannel != nil {
-			param.logChannel <- fmt.Sprintf("init http request failed due to %v", err)
-		}
+		param.Log(fmt.Sprintf("init http request failed due to %v", err))
 		return nil, err
 	}
 
@@ -52,6 +50,7 @@ func Get(url string, parameters ...RequestParam) (*http.Response, error) {
 	}
 
 	var response *http.Response
+	var message string
 	for index := 0; index <= param.Retry; index++ {
 		response, err = http.DefaultClient.Do(request)
 		if err == nil {
@@ -59,23 +58,23 @@ func Get(url string, parameters ...RequestParam) (*http.Response, error) {
 			switch response.StatusCode {
 			case http.StatusOK, http.StatusNotFound:
 				return response, nil
-			default:
-				err = fmt.Errorf("response status code: %d", response.StatusCode)
 			}
 		}
 
 		if param.Retry > index {
-			if param.logChannel != nil {
-				param.logChannel <- fmt.Sprintf("request failed due to %v, retry in %s(remain %d times)",
-					err, param.RetryInterval.String(), param.Retry-index)
+			if err != nil {
+				message = err.Error()
+			} else {
+				message = fmt.Sprintf("response status code %d", response.StatusCode)
 			}
+
+			param.Log(fmt.Sprintf("request failed due to %s, retry in %s(remain %d times)",
+				message, param.RetryInterval.String(), param.Retry-index))
 			time.Sleep(param.RetryInterval)
 		}
 	}
 
-	if param.logChannel != nil {
-		param.logChannel <- fmt.Sprintf("request failed due to %v, retied %d times)", err, param.Retry)
-	}
+	param.Log(fmt.Sprintf("request failed due to %v, retied %d times)", err, param.Retry))
 
 	return response, err
 }
@@ -87,6 +86,15 @@ type Param struct {
 	Retry         int
 	RetryInterval time.Duration
 	logChannel    chan<- string
+}
+
+// Log send log
+func (s Param) Log(log string) {
+	if s.logChannel == nil {
+		return
+	}
+
+	s.logChannel <- log
 }
 
 // RequestParam defines download parameters
