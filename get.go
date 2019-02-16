@@ -88,6 +88,10 @@ func GetBuffer(url string, parameters ...RequestParam) (*bytes.Buffer, error) {
 
 			completed = int64(buffer.Len())
 			speed = completed - lastCompleted/int64(interval.Seconds())
+			if speed == 0 {
+				continue
+			}
+
 			param.ProgressChannel <- &Progress{
 				Total:     response.ContentLength,
 				Completed: completed,
