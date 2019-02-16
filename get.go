@@ -56,16 +56,16 @@ func GetBuffer(url string, parameters ...RequestParam) (*bytes.Buffer, error) {
 	}
 
 	buffer := new(bytes.Buffer)
-	buffer.Grow(int(response.ContentLength))
 
 	start := time.Now()
 	now := start
 	lastProgressAt := start
 	var completed, lastCompleted, speed int64
 	var interval time.Duration
+	var read int
 	temp := make([]byte, 10240)
 	for {
-		read, err := response.Body.Read(temp)
+		read, err = response.Body.Read(temp)
 		if err == io.EOF {
 			break
 		}
