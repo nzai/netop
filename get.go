@@ -2,10 +2,16 @@ package netop
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
+)
+
+var (
+	// ErrNotFound not found
+	ErrNotFound = errors.New("not found")
 )
 
 // GetString send a GET request to server and return response string or error
@@ -40,6 +46,10 @@ func GetBuffer(url string, parameters ...RequestParam) (*bytes.Buffer, error) {
 		return nil, err
 	}
 	defer response.Body.Close()
+
+	if response.StatusCode == http.StatusNotFound {
+		return nil, ErrNotFound
+	}
 
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("response status code: %d", response.StatusCode)
