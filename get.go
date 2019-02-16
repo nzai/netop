@@ -82,7 +82,7 @@ func GetBuffer(url string, parameters ...RequestParam) (*bytes.Buffer, error) {
 		if param.ProgressInterval >= 0 {
 			now = time.Now()
 			interval = now.Sub(lastProgressAt)
-			if interval < param.ProgressInterval || interval == 0 {
+			if interval < param.ProgressInterval || interval.Seconds() == 0 {
 				continue
 			}
 
