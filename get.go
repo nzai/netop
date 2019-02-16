@@ -55,28 +55,32 @@ func GetBuffer(url string, parameters ...RequestParam) (*bytes.Buffer, error) {
 		return nil, fmt.Errorf("response status code: %d", response.StatusCode)
 	}
 
-	buffer := new(bytes.Buffer)
-
 	start := time.Now()
 	now := start
 	lastProgressAt := start
 	var completed, lastCompleted, speed, intervalSeconds int64
 	var interval time.Duration
 	var read int
+
+	buffer := new(bytes.Buffer)
 	temp := make([]byte, 10240)
 	for {
 		read, err = response.Body.Read(temp)
+		if read < 0 {
+			break
+		}
+
+		_, err1 := buffer.Write(temp[:read])
+		if err1 != nil {
+			return nil, fmt.Errorf("write buffer failed due to %v", err1)
+		}
+
 		if err == io.EOF {
 			break
 		}
 
 		if err != nil {
 			return nil, fmt.Errorf("read response failed due to %v", err)
-		}
-
-		_, err = buffer.Write(temp[:read])
-		if err != nil {
-			return nil, fmt.Errorf("write buffer failed due to %v", err)
 		}
 
 		if param.ProgressInterval >= 0 {
