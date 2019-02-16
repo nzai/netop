@@ -1,8 +1,9 @@
 package netop
 
 import (
+	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"time"
 )
@@ -19,7 +20,22 @@ func GetString(url string, parameters ...RequestParam) (string, error) {
 
 // GetBytes send a GET request to server and return response buffer or error
 func GetBytes(url string, parameters ...RequestParam) ([]byte, error) {
-	response, err := Get(url, parameters...)
+	buffer, err := GetBuffer(url, parameters...)
+	if err != nil {
+		return nil, err
+	}
+
+	return buffer.Bytes(), nil
+}
+
+// GetBuffer send a GET request to server and return response buffer or error
+func GetBuffer(url string, parameters ...RequestParam) (*bytes.Buffer, error) {
+	param := &Param{URL: url}
+	for _, parameter := range parameters {
+		parameter.apply(param)
+	}
+
+	response, err := doGet(url, param)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +45,52 @@ func GetBytes(url string, parameters ...RequestParam) ([]byte, error) {
 		return nil, fmt.Errorf("response status code: %d", response.StatusCode)
 	}
 
-	return ioutil.ReadAll(response.Body)
+	buffer := new(bytes.Buffer)
+	buffer.Grow(int(response.ContentLength))
+
+	start := time.Now()
+	now := start
+	lastProgressAt := start
+	var completed, lastCompleted, speed int64
+	var interval time.Duration
+	temp := make([]byte, 10240)
+	for {
+		read, err := response.Body.Read(temp)
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("read response failed due to %v", err)
+		}
+
+		_, err = buffer.Write(temp[:read])
+		if err != nil {
+			return nil, fmt.Errorf("write buffer failed due to %v", err)
+		}
+
+		if param.ProgressInterval >= 0 {
+			now = time.Now()
+			interval = now.Sub(lastProgressAt)
+			if interval < param.ProgressInterval || interval == 0 {
+				continue
+			}
+
+			completed = int64(buffer.Len())
+			speed = completed - lastCompleted/int64(interval.Seconds())
+			param.ProgressChannel <- &Progress{
+				Total:     response.ContentLength,
+				Completed: completed,
+				Speed:     speed,
+				Elapsed:   now.Sub(start),
+				Remain:    time.Second * time.Duration((response.ContentLength-completed)/speed),
+			}
+			lastProgressAt = now
+			lastCompleted = completed
+		}
+	}
+
+	return buffer, nil
 }
 
 // Get send a GET request to server and return response or error
@@ -39,6 +100,11 @@ func Get(url string, parameters ...RequestParam) (*http.Response, error) {
 		parameter.apply(param)
 	}
 
+	return doGet(url, param)
+}
+
+// doGet send a GET request to server and return response or error
+func doGet(url string, param *Param) (*http.Response, error) {
 	request, err := http.NewRequest("GET", param.URL, nil)
 	if err != nil {
 		param.Log(fmt.Sprintf("init http request failed due to %v", err))
@@ -79,22 +145,42 @@ func Get(url string, parameters ...RequestParam) (*http.Response, error) {
 	return response, err
 }
 
+// Progress download progress
+type Progress struct {
+	Total     int64
+	Completed int64
+	Speed     int64
+	Elapsed   time.Duration
+	Remain    time.Duration
+}
+
 // Param download parameters
 type Param struct {
-	URL           string
-	Refer         string
-	Retry         int
-	RetryInterval time.Duration
-	logChannel    chan<- string
+	URL              string
+	Refer            string
+	Retry            int
+	RetryInterval    time.Duration
+	LogChannel       chan<- string
+	ProgressChannel  chan<- *Progress
+	ProgressInterval time.Duration
 }
 
 // Log send log
 func (s Param) Log(log string) {
-	if s.logChannel == nil {
+	if s.LogChannel == nil {
 		return
 	}
 
-	s.logChannel <- log
+	s.LogChannel <- log
+}
+
+// SendProgress send progress
+func (s Param) SendProgress(progress *Progress) {
+	if s.ProgressChannel == nil {
+		return
+	}
+
+	s.ProgressChannel <- progress
 }
 
 // RequestParam defines download parameters
@@ -124,6 +210,14 @@ func Retry(retry int, interval time.Duration) RequestParam {
 // Log set log chan to show operation log
 func Log(logChannel chan<- string) RequestParam {
 	return paramFunc(func(p *Param) {
-		p.logChannel = logChannel
+		p.LogChannel = logChannel
+	})
+}
+
+// OnProgress send download progress
+func OnProgress(progressChannel chan<- *Progress, interval time.Duration) RequestParam {
+	return paramFunc(func(p *Param) {
+		p.ProgressChannel = progressChannel
+		p.ProgressInterval = interval
 	})
 }
