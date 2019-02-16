@@ -60,7 +60,7 @@ func GetBuffer(url string, parameters ...RequestParam) (*bytes.Buffer, error) {
 	start := time.Now()
 	now := start
 	lastProgressAt := start
-	var completed, lastCompleted, speed int64
+	var completed, lastCompleted, speed, intervalSeconds int64
 	var interval time.Duration
 	var read int
 	temp := make([]byte, 10240)
@@ -82,12 +82,17 @@ func GetBuffer(url string, parameters ...RequestParam) (*bytes.Buffer, error) {
 		if param.ProgressInterval >= 0 {
 			now = time.Now()
 			interval = now.Sub(lastProgressAt)
-			if interval < param.ProgressInterval || interval.Seconds() == 0 {
+			if interval < param.ProgressInterval {
+				continue
+			}
+
+			intervalSeconds = int64(interval.Seconds())
+			if intervalSeconds == 0 {
 				continue
 			}
 
 			completed = int64(buffer.Len())
-			speed = completed - lastCompleted/int64(interval.Seconds())
+			speed = (completed - lastCompleted) / intervalSeconds
 			if speed == 0 {
 				continue
 			}
