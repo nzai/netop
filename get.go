@@ -36,7 +36,7 @@ func GetBytes(url string, parameters ...RequestParam) ([]byte, error) {
 
 // GetBuffer send a GET request to server and return response buffer or error
 func GetBuffer(url string, parameters ...RequestParam) (*bytes.Buffer, error) {
-	param := &Param{URL: url}
+	param := &Param{URL: url, Headers: make(map[string]string)}
 	for _, parameter := range parameters {
 		parameter.apply(param)
 	}
@@ -118,7 +118,7 @@ func GetBuffer(url string, parameters ...RequestParam) (*bytes.Buffer, error) {
 
 // Get send a GET request to server and return response or error
 func Get(url string, parameters ...RequestParam) (*http.Response, error) {
-	param := &Param{URL: url}
+	param := &Param{URL: url, Headers: make(map[string]string)}
 	for _, parameter := range parameters {
 		parameter.apply(param)
 	}
@@ -134,8 +134,8 @@ func doGet(url string, param *Param) (*http.Response, error) {
 		return nil, err
 	}
 
-	if param.Refer != "" {
-		request.Header.Set("Referer", param.Refer)
+	for key, value := range param.Headers {
+		request.Header.Set(key, value)
 	}
 
 	var response *http.Response
@@ -180,7 +180,7 @@ type Progress struct {
 // Param download parameters
 type Param struct {
 	URL              string
-	Refer            string
+	Headers          map[string]string
 	Retry            int
 	RetryInterval    time.Duration
 	LogChannel       chan<- string
@@ -219,7 +219,12 @@ func (f paramFunc) apply(p *Param) {
 
 // Refer set request refer
 func Refer(refer string) RequestParam {
-	return paramFunc(func(p *Param) { p.Refer = refer })
+	return Header("Referer", refer)
+}
+
+// Header set request header
+func Header(key, value string) RequestParam {
+	return paramFunc(func(p *Param) { p.Headers[key] = value })
 }
 
 // Retry set request retry times and interval
