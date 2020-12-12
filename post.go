@@ -2,21 +2,16 @@ package netop
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
-var (
-	// ErrNotFound not found
-	ErrNotFound = errors.New("not found")
-)
-
-// GetString send a GET request to server and return response string or error
-func GetString(url string, parameters ...RequestParam) (string, error) {
-	buffer, err := GetBytes(url, parameters...)
+// PostString send a GET request to server and return response string or error
+func PostString(url string, parameters ...RequestParam) (string, error) {
+	buffer, err := PostBytes(url, parameters...)
 	if err != nil {
 		return "", err
 	}
@@ -24,9 +19,9 @@ func GetString(url string, parameters ...RequestParam) (string, error) {
 	return string(buffer), nil
 }
 
-// GetBytes send a GET request to server and return response buffer or error
-func GetBytes(url string, parameters ...RequestParam) ([]byte, error) {
-	buffer, err := GetBuffer(url, parameters...)
+// PostBytes send a GET request to server and return response buffer or error
+func PostBytes(url string, parameters ...RequestParam) ([]byte, error) {
+	buffer, err := PostBuffer(url, parameters...)
 	if err != nil {
 		return nil, err
 	}
@@ -34,14 +29,14 @@ func GetBytes(url string, parameters ...RequestParam) ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
-// GetBuffer send a GET request to server and return response buffer or error
-func GetBuffer(url string, parameters ...RequestParam) (*bytes.Buffer, error) {
+// PostBuffer send a GET request to server and return response buffer or error
+func PostBuffer(url string, parameters ...RequestParam) (*bytes.Buffer, error) {
 	param := &Param{URL: url, Headers: make(map[string]string)}
 	for _, parameter := range parameters {
 		parameter.apply(param)
 	}
 
-	response, err := doGet(url, param)
+	response, err := doPost(url, param)
 	if err != nil {
 		return nil, err
 	}
@@ -116,22 +111,26 @@ func GetBuffer(url string, parameters ...RequestParam) (*bytes.Buffer, error) {
 	return buffer, nil
 }
 
-// Get send a GET request to server and return response or error
-func Get(url string, parameters ...RequestParam) (*http.Response, error) {
+// Post send a GET request to server and return response or error
+func Post(url string, parameters ...RequestParam) (*http.Response, error) {
 	param := &Param{URL: url, Headers: make(map[string]string)}
 	for _, parameter := range parameters {
 		parameter.apply(param)
 	}
 
-	return doGet(url, param)
+	return doPost(url, param)
 }
 
-// doGet send a GET request to server and return response or error
-func doGet(url string, param *Param) (*http.Response, error) {
-	request, err := http.NewRequest("GET", param.URL, nil)
+// doPost send a POST request to server and return response or error
+func doPost(url string, param *Param) (*http.Response, error) {
+	request, err := http.NewRequest("POST", param.URL, strings.NewReader(param.Form.Encode()))
 	if err != nil {
 		param.Log(fmt.Sprintf("init http request failed due to %v", err))
 		return nil, err
+	}
+
+	if len(param.Form) > 0 {
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
 
 	for key, value := range param.Headers {
