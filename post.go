@@ -42,12 +42,9 @@ func PostBuffer(url string, parameters ...RequestParam) (*bytes.Buffer, error) {
 	}
 	defer response.Body.Close()
 
-	if response.StatusCode == http.StatusNotFound {
-		return nil, ErrNotFound
-	}
-
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("response status code: %d", response.StatusCode)
+	if param.ValidStatusCode != nil && !param.ValidStatusCode[response.StatusCode] {
+		param.Log(fmt.Sprintf("invalid response status code: %d", response.StatusCode))
+		return nil, ErrInvalidResponseStatusCode
 	}
 
 	start := time.Now()
@@ -123,18 +120,19 @@ func Post(url string, parameters ...RequestParam) (*http.Response, error) {
 
 // doPost send a POST request to server and return response or error
 func doPost(url string, param *Param) (*http.Response, error) {
-	request, err := http.NewRequest("POST", param.URL, strings.NewReader(param.Form.Encode()))
+	request, err := http.NewRequest(http.MethodPost, param.URL, strings.NewReader(param.Form.Encode()))
 	if err != nil {
 		param.Log(fmt.Sprintf("init http request failed due to %v", err))
 		return nil, err
 	}
 
-	if len(param.Form) > 0 {
-		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	}
-
 	for key, value := range param.Headers {
 		request.Header.Set(key, value)
+	}
+
+	if len(param.Form) > 0 {
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.Form = param.Form
 	}
 
 	var response *http.Response
@@ -142,11 +140,7 @@ func doPost(url string, param *Param) (*http.Response, error) {
 	for index := 0; index <= param.Retry; index++ {
 		response, err = http.DefaultClient.Do(request)
 		if err == nil {
-			// return response on status code 200, or give up retry on status code 404
-			switch response.StatusCode {
-			case http.StatusOK, http.StatusNotFound:
-				return response, nil
-			}
+			return response, nil
 		}
 
 		if param.Retry > index {

@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	// ErrNotFound not found
-	ErrNotFound = errors.New("not found")
+	// ErrInvalidResponseStatusCode invalid response status code
+	ErrInvalidResponseStatusCode = errors.New("invalid response status code")
 )
 
 // GetString send a GET request to server and return response string or error
@@ -47,12 +47,9 @@ func GetBuffer(url string, parameters ...RequestParam) (*bytes.Buffer, error) {
 	}
 	defer response.Body.Close()
 
-	if response.StatusCode == http.StatusNotFound {
-		return nil, ErrNotFound
-	}
-
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("response status code: %d", response.StatusCode)
+	if param.ValidStatusCode != nil && !param.ValidStatusCode[response.StatusCode] {
+		param.Log(fmt.Sprintf("invalid response status code: %d", response.StatusCode))
+		return nil, ErrInvalidResponseStatusCode
 	}
 
 	start := time.Now()
@@ -128,7 +125,7 @@ func Get(url string, parameters ...RequestParam) (*http.Response, error) {
 
 // doGet send a GET request to server and return response or error
 func doGet(url string, param *Param) (*http.Response, error) {
-	request, err := http.NewRequest("GET", param.URL, nil)
+	request, err := http.NewRequest(http.MethodGet, param.URL, nil)
 	if err != nil {
 		param.Log(fmt.Sprintf("init http request failed due to %v", err))
 		return nil, err
@@ -143,11 +140,7 @@ func doGet(url string, param *Param) (*http.Response, error) {
 	for index := 0; index <= param.Retry; index++ {
 		response, err = http.DefaultClient.Do(request)
 		if err == nil {
-			// return response on status code 200, or give up retry on status code 404
-			switch response.StatusCode {
-			case http.StatusOK, http.StatusNotFound:
-				return response, nil
-			}
+			return response, nil
 		}
 
 		if param.Retry > index {
