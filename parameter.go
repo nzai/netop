@@ -5,15 +5,6 @@ import (
 	"time"
 )
 
-// Progress download progress
-type Progress struct {
-	Total     int64
-	Completed int64
-	Speed     int64
-	Elapsed   time.Duration
-	Remain    time.Duration
-}
-
 // Param download parameters
 type Param struct {
 	URL              string
